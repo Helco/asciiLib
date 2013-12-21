@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style>
+.consoleContainer
+{
+	text-align:center;
+}
+.consoleClass
+{
+	text-align:left;
+	color:white;
+	background-color:black;
+	border:12px solid gray;
+	display:inline-block;
+	font-family: Lucidia Console,monospace;
+	font-weight: bold;
+	font-size: 14px;
+	line-height:16px;
+	
+}
+.fontWidthTestClass
+{
+	position: absolute;
+	visibility: hidden;
+	height: auto;
+	width: auto;
+	font-family: Lucidia Console,monospace;
+	font-weight: bold;
+	font-size: 14px;
+	line-height:16px;
+	
+}
+</style>
+</head>
+
+<body>
+<span id="fontWidthTest" class="fontWidthTestClass">.</span>
+<span id="emscriptenCanvasDummy" class="fontWidthTestClass"></span>
+<div class="consoleContainer"><div id="console" class="consoleClass">Downloading...</div>
+<script type='text/javascript'>
+var Module = {
+	noExitRuntime : true,
+        preRun: [],
+        postRun: [],
+        print: (function() {
+          return function(text) {
+            text = Array.prototype.slice.call(arguments).join(' ');
+            console.log(text);
+          };
+        })(),
+        printErr: function(text) {
+          text = Array.prototype.slice.call(arguments).join(' ');
+	  var element=document.getElementById('errorOutput');
+          console.log(text);
+        },
+        canvas: document.getElementById('console'),
+        setStatus: function(text) {
+          document.getElementById("console").innerHTML=text;
+        },
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        }
+      };
+      Module.setStatus('Downloading...');
+</script>
+<script type='text/javascript'>{{{ SCRIPT_CODE }}}</script>
+</body>
+
+</html>
