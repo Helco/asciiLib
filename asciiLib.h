@@ -2,7 +2,17 @@
 #define __ASCIILIB_H__
 
 #include <stdint.h>
-
+#define ASCII_TIMER_INVALID -1
+#define ASCII_MAX_TIMER 16
+#define ASCII_SUCESS ((asciiResult)1)
+#define ASCII_FAILED ((asciiResult)0)
+enum {
+	ASCII_CHARACTER_LOCK=1<<0,
+	ASCII_BACKCOLOR_LOCK=1<<1,
+	ASCII_FORECOLOR_LOCK=1<<2,
+	ASCII_TARGET_BITMAP=1<<3,
+	ASCII_OPT_COUNT=4
+};
 enum {
 	ASCII_COLOR_BLACK=0,
 	ASCII_COLOR_RED,
@@ -67,15 +77,19 @@ enum {
 	ASCII_KEYRELEASED=0
 };
 typedef const char* asciiString;
+typedef int8_t asciiTextchar;
+typedef int8_t asciiColor;
+typedef int8_t asciiTimerID;
+typedef int8_t asciiResult;
 typedef struct {
-	int8_t character;
-	int8_t backColor;
-	int8_t foreColor;
-	int8_t reserved;
+	asciiTextchar character;
+	asciiColor backColor;
+	asciiColor foreColor;
+	int8_t reserved; //padding byte (to 32bit)
 } asciiChar;
 typedef struct {
-	uint8_t x;
-	uint8_t y;
+	int32_t x;
+	int32_t y;
 } asciiPoint;
 typedef struct {
 	asciiPoint offset;
@@ -83,54 +97,79 @@ typedef struct {
 } asciiRect;
 typedef struct {
 	asciiRect bounds;
-	int8_t* address;
-	int8_t trans;
+	asciiTextchar* address;
+	asciiTextchar trans;
+	int8_t ownMemory;
+	int32_t pitch;
 } asciiBitmap;
 typedef struct {
 	asciiRect bounds;
 	asciiChar* address;
-	int8_t trans;
+	asciiChar trans;
+	int8_t ownMemory;
+	int32_t pitch;
 } asciiColoredBitmap;
 
 typedef void (*asciiKeyEventCallback) (uint8_t key,uint8_t pressed,void* context);
+typedef void (*asciiMouseEventCallback) (uint8_t buttonPressed,asciiPoint mousePos,void* context);
 typedef void (*asciiQuitCallback) (void* context);
-typedef int8_t (*asciiTextInStreamCallback) (void* context); //pass 0 to signal the end
+typedef void (*asciiTimeoutCallback) (void* context);
+typedef asciiTextchar (*asciiTextInStreamCallback) (void* context); //pass 0 to signal the end
 
 //System functions
-int8_t asciiInit (uint8_t width,uint8_t height);//width/height doesn't get set on UNIX backend, this has to be done in a launcher script
+asciiResult asciiInit (int32_t width,int32_t height);
 void asciiRun ();
 void asciiSignalQuit (); //should be only called when building a local app
-//Trivial functions
-int8_t asciiGetStdBackColor ();
-int8_t asciiGetStdForeColor ();
-void asciiSetStdBackColor (int8_t backColor);
-void asciiSetStdForeColor (int8_t foreColor);
-asciiPoint asciiGetSize ();
-asciiChar* asciiGetConsoleBuffer ();
 void asciiSetKeyEventCallback (asciiKeyEventCallback callback,void* context);
+void asciiSetMouseKeyEventCallback (asciiMouseEventCallback callback,void* context);
+void asciiSetMouseMoveEventCallback (asciiMouseEventCallback callback,void* context);
 void asciiSetQuitCallback (asciiQuitCallback callback,void* context);
-int8_t asciiKeyToAscii (uint8_t key);
-void asciiSetBitmapTransparent (asciiBitmap* bitmap,int8_t ch);
-void asciiSetColoredBitmapTransparent (asciiColoredBitmap* bitmap,int8_t ch);
-void asciiFreeBitmap (asciiBitmap* bm);// only for bitmaps allocated with malloc (this includes bitmaps returned from asciiLoad* )
+
+//Graphic management functions
+void asciiEnable (uint32_t bit);
+void asciiDisable (uint32_t bit);
+void asciiSetClearChar (asciiChar ch);
+void asciiSetTargetBitmap (asciiColoredBitmap* target);
+asciiChar asciiGetClearChar ();
+asciiColoredBitmap* asciiGetTargetBitmap ();
+asciiPoint asciiGetTargetSize ();
+
+//bitmap functions
+void asciiSetBitmapTransparent (asciiBitmap* bitmap,asciiTextchar ch);
+void asciiSetColoredBitmapTransparent (asciiColoredBitmap* bitmap,asciiChar ch);
+asciiBitmap asciiCreateBitmap (asciiPoint size);
+asciiBitmap asciiCreateBitmapEx (asciiPoint size,asciiColor backColor,asciiColor foreColor);
+asciiBitmap asciiCreateFilledBitmap (asciiPoint size,asciiTextchar fillChar);
+asciiBitmap asciiCreateFilledBitmapEx (asciiPoint size,asciiChar ch);
+asciiColoredBitmap asciiCreateColoredBitmap (asciiPoint size);
+asciiColoredBitmap asciiCreateFilledColoredBitmap (asciiPoint size,asciiChar fillChar);
+asciiBitmap asciiCreateSubBitmap (asciiBitmap source,asciiRect bounds);
+asciiColoredBitmap asciiCreateSubColoredBitmap (asciiColoredBitmap source,asciiRect bounds);
+void asciiFreeBitmap (asciiBitmap* bm);// only for bitmaps allocated with malloc (this includes bitmaps returned from ascii* )
 void asciiFreeColoredBitmap (asciiColoredBitmap* bm);//see ^
-//Graphic functions
-int8_t asciiFlip ();
+
+//time functions
+asciiTimerID asciiSetTimeout (uint32_t ms,asciiTimeoutCallback callback,void* context);
+void asciiCancelTimer (asciiTimerID id);
+void asciiCancelAllTimer ();
+
+//render functions
+asciiResult asciiFlip ();
 void asciiFillRect (asciiChar ch,asciiRect rect);
 void asciiClearRect (asciiRect rect);
-void asciiDrawChar (int8_t c,asciiPoint offset);
-void asciiDrawCharacter (asciiChar c,asciiPoint offset);
-void asciiDrawCharColored (int8_t c,asciiPoint offset,int8_t backColor,int8_t foreColor);
+void asciiDrawChar (asciiChar c,asciiPoint offset);
+void asciiDrawTextchar (asciiTextchar c,asciiPoint offset);
 void asciiDrawText (asciiString str,asciiPoint offset);
-void asciiDrawTextColored (asciiString str,asciiPoint offset,int8_t backColor,int8_t foreColor);
+void asciiDrawTextColored (asciiString str,asciiPoint offset,asciiColor backColor,asciiColor foreColor);
 void asciiDrawSizedText (asciiString str,uint32_t len,asciiPoint offset);
-void asciiDrawSizedTextColored (asciiString str,uint32_t len,asciiPoint offset,int8_t backColor,int8_t foreColor);
+void asciiDrawSizedTextColored (asciiString str,uint32_t len,asciiPoint offset,asciiColor backColor,asciiColor foreColor);
 void asciiDrawBitmap (asciiBitmap bitmap,asciiRect rect);
-void asciiDrawBitmapColored (asciiBitmap bitmap,asciiRect rect,int8_t backColor,int8_t foreColor);
+void asciiDrawBitmapColored (asciiBitmap bitmap,asciiRect rect,asciiColor backColor,asciiColor foreColor);
 void asciiDrawColoredBitmap (asciiColoredBitmap bitmap,asciiRect rect);
-void asciiScrollScreen (uint8_t amount);
-void asciiScrollRect (uint8_t amount,asciiRect rect);
-//Format functions
+void asciiScrollScreen (uint32_t amount); //currently only up scrolling is supported
+void asciiScrollRect (uint32_t amount,asciiRect rect);
+
+//(bitmap) format functions
 asciiBitmap asciiLoadBitmapFromFile (asciiString fn);
 asciiBitmap asciiLoadBitmapFromFilePtr (void* fp); //pass a FILE pointer in
 asciiBitmap asciiLoadBitmapFromStream (asciiTextInStreamCallback stream,void* context);
@@ -138,11 +177,14 @@ asciiColoredBitmap asciiLoadColoredBitmapFromFile (asciiString fn);
 asciiColoredBitmap asciiLoadColoredBitmapFromFilePtr (void* fp); //pass a FILE pointer in
 asciiColoredBitmap asciiLoadColoredBitmapFromStream (asciiTextInStreamCallback stream,void* context);
 
+//misc functions
+asciiColor asciiKeyToAscii (uint8_t key);
+asciiRect asciiClipRect (asciiRect toClip,asciiRect clipRect);
 #ifdef _MSC_VER
-    //MSVC doesn't allow initalizer lists
-    asciiPoint _ascii_make_asciiPoint (uint8_t x,uint8_t y);
-    asciiRect _ascii_make_asciiRect (uint8_t x,uint8_t y,uint8_t w,uint8_t h);
-    asciiChar _ascii_make_asciiChar (int8_t ch,int8_t bc,int8_t fc);
+    //MSVC doesn't support initalizer lists
+    asciiPoint _ascii_make_asciiPoint (int32_t x,int32_t y);
+    asciiRect _ascii_make_asciiRect (int32_t x,int32_t y,int32_t w,int32_t h);
+    asciiChar _ascii_make_asciiChar (asciiTextchar ch,asciiColor bc,asciiColor fc);
     #define asciiPoint(x,y) (_ascii_make_asciiPoint(x,y))
     #define asciiRect(x,y,w,h) (_ascii_make_asciiRect(x,y,w,h))
     #define asciiChar(ch,bc,fc) (_ascii_make_asciiChar(ch,bc,fc))
