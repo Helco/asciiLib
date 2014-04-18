@@ -1,0 +1,1 @@
+%EMSCRIPTEN%\emcc.bat -Wall -s EXPORTED_FUNCTIONS="['__onjs_fireTimeout','__onjs_fireMouseKey','__onjs_fireMouseMove','_main']" -DEMSCRIPTEN asciiLib.c asciiLibBackendEmscripten.c main.c --shell-file .\shell.html --js-library .\asciiLib.js -o testIndex.html --preload-file image.txt
