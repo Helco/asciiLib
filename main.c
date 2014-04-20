@@ -56,7 +56,7 @@ void writeConsole (const char* text) {
 	}
 }
 
-void keyEventCallback (uint8_t key,uint8_t pressed,void* context) {
+void keyEventCallback (asciiKey key,asciiBool pressed,void* context) {
 	if (pressed) {
 		if (key==ASCII_KEY_ESCAPE)
             asciiSignalQuit (e);
@@ -91,9 +91,15 @@ void keyEventCallback (uint8_t key,uint8_t pressed,void* context) {
 	}
 }
 
-void mouseMoveEventCallback (uint8_t buttonPressed,asciiPoint pos,void* context) {
-	if (buttonPressed) {
+void mouseMoveHandler (asciiPoint pos,void* context) {
+	asciiBool key = asciiIsMouseKeyPressed(e,ASCII_MOUSE_BUTTON_LEFT);
+	asciiBool key2 = asciiIsMouseKeyPressed(e,ASCII_MOUSE_BUTTON_RIGHT);
+	if (key) {
 		asciiDrawChar(e,asciiChar('x',ASCII_COLOR_WHITE,ASCII_COLOR_BLACK),pos);
+		asciiFlip (e);
+	}
+	if (key2) {
+		asciiDrawChar(e,asciiChar(' ',ASCII_COLOR_WHITE,ASCII_COLOR_BLACK),pos);
 		asciiFlip (e);
 	}
 }
@@ -102,7 +108,7 @@ int main (int argc,char* argv[]) {
 	srand((unsigned int)time(0));
 	e = asciiInit (ASCII_GRAPHIC_DEFAULT,SCREEN_WIDTH,SCREEN_HEIGHT);
 	asciiSetKeyEventCallback (e,keyEventCallback,0);
-	asciiSetMouseMoveEventCallback(e,mouseMoveEventCallback,0);
+	asciiSetMouseMoveEventCallback(e,mouseMoveHandler,0);
 	consoleHeader=asciiLoadBitmapFromFile ("image.txt");
 	if (consoleHeader.address==0)
 		asciiDrawTextColored(e,"Failed to load bitmap!",asciiPoint(30,0),ASCII_COLOR_RED,ASCII_COLOR_GREEN);

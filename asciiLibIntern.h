@@ -62,6 +62,7 @@ typedef struct _asciiGBackend {
 #define ASCII_IS_BACKCOLOR_LOCK(e)   ASCII_IS_OPT((e),ASCII_BACKCOLOR_LOCK)
 #define ASCII_IS_FORECOLOR_LOCK(e)   ASCII_IS_OPT((e),ASCII_FORECOLOR_LOCK)
 #define ASCII_IS_TARGET_BITMAP(e)    ASCII_IS_OPT((e),ASCII_TARGET_BITMAP)
+#define ASCII_IS_KEY_REPEAT(e)		 ASCII_IS_OPT((e),ASCII_KEY_REPEAT)
 #define ASCII_TARGET(e)              (ASCII_IS_TARGET_BITMAP(e)?(e)->targetBitmap:&(e)->screen)
 
 static const int8_t asciiKeyAsciiTable[ASCII_KEYCOUNT]={
@@ -88,12 +89,16 @@ struct _asciiEngine{
 	asciiColoredBitmap* targetBitmap;
 	asciiChar clearChar;
 	uint32_t optBitmask;
+	//mouse/keyboard state
+	asciiBool keyboardState [ASCII_KEYCOUNT];
+	asciiMouseKey mouseKeyState;
+	asciiPoint mousePosition;
 	//callbacks
 	asciiKeyEventCallback keyEventCallback;
 	void* keyEventCallbackContext;
-	asciiMouseEventCallback mouseKeyEventCallback;
+	asciiMouseKeyEventCallback mouseKeyEventCallback;
 	void* mouseKeyEventCallbackContext;
-	asciiMouseEventCallback mouseMoveEventCallback;
+	asciiMouseMoveEventCallback mouseMoveEventCallback;
 	void* mouseMoveEventCallbackContext;
 	asciiQuitCallback quitCallback;
 	void* quitCallbackContext;
@@ -102,8 +107,13 @@ struct _asciiEngine{
 extern const asciiEngine asciiDefaultEngine;
 
 /*
- * INTERN API
+ * INTERN API (called by the backend)
  */
+void asciiOnMouseMove (asciiEngine* e,asciiPoint newPos);
+void asciiOnMouseDown (asciiEngine* e,asciiMouseKey key);
+void asciiOnMouseUp (asciiEngine* e,asciiMouseKey key);
+void asciiOnKeyDown (asciiEngine* e,asciiKey key);
+void asciiOnKeyUp (asciiEngine* e,asciiKey key);
 void asciiQuit (asciiEngine* e);
 
 /*

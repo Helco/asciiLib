@@ -83,16 +83,16 @@ asciiBool _ascii_flipWin (asciiEngine* e) {
 	return (int8_t)WriteConsoleOutputA(asciiWin.hConsoleOut,asciiWin.consoleScreenBuffer,
 		asciiWin.dwBufferSize,asciiWin.dwBufferCoord,&asciiWin.dwConsoleRect);
 }
-#define _win_keyMappingCount 11 //a constant doesn't work in msvc
+#define _win_keyMappingCount 12 //a constant doesn't work in msvc
 #define _win_inputBufferSize 16
 const asciiKeyMap _win_keyMappings [_win_keyMappingCount]={
 	{VK_BACK,ASCII_KEY_BACKSPACE},{VK_TAB,ASCII_KEY_TAB},{VK_RETURN,ASCII_KEY_RETURN},{VK_ESCAPE,ASCII_KEY_ESCAPE},
 	{VK_SPACE,ASCII_KEY_SPACE},{VK_UP,ASCII_KEY_UP},{VK_DOWN,ASCII_KEY_DOWN},{VK_RIGHT,ASCII_KEY_RIGHT},
-	{VK_LEFT,ASCII_KEY_LEFT},{VK_SHIFT,ASCII_KEY_SHIFT},{VK_CONTROL,ASCII_KEY_CTRL}};
+	{VK_LEFT,ASCII_KEY_LEFT},{VK_SHIFT,ASCII_KEY_SHIFT},{VK_CONTROL,ASCII_KEY_CTRL},{VK_MENU,ASCII_KEY_ALT}};
 void _ascii_runWin (asciiEngine* e) {
 	INPUT_RECORD inputBuffer[_win_inputBufferSize];
 	DWORD i,inputLen,chunkLen;
-	uint8_t key,state,mapI;
+	uint8_t key,mapI;
 	asciiPoint mousePos;
 	asciiTimerID timerID;
 	asciiWin.isRunning=1;
@@ -103,21 +103,24 @@ void _ascii_runWin (asciiEngine* e) {
 				e->timers[timerID].callback=0;
 			}
 		}
-		if ((e->keyEventCallback || e->mouseKeyEventCallback || e->mouseMoveEventCallback) &&
-			GetNumberOfConsoleInputEvents (asciiWin.hConsoleIn,&inputLen)!=0 && inputLen>0) {
+		if (GetNumberOfConsoleInputEvents (asciiWin.hConsoleIn,&inputLen)!=0 && inputLen>0) {
 				while (inputLen>0) {
 					if (ReadConsoleInputA(asciiWin.hConsoleIn,inputBuffer,_win_inputBufferSize,&chunkLen)==0)
 						break;
-					inputLen -= chunkLen;
+					if (inputLen >= chunkLen)
+						inputLen -= chunkLen;
+					else
+						inputLen = 0;
 					for (i=0;i<chunkLen;i++) {
-						if (inputBuffer[i].EventType==KEY_EVENT && e->keyEventCallback!=0) {
-							state = inputBuffer[i].Event.KeyEvent.bKeyDown==TRUE;
+						if (inputBuffer[i].EventType==KEY_EVENT) {
 							if (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar>='a' && inputBuffer[i].Event.KeyEvent.uChar.AsciiChar<='z')
-								key = ASCII_KEY_A+(inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'a');
+								key = ASCII_KEY_A + (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'a');
 							else if (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar>='A' && inputBuffer[i].Event.KeyEvent.uChar.AsciiChar<='Z')
-								key = ASCII_KEY_A+(inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'A');
+								key = ASCII_KEY_A + (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'A');
 							else if (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar>='0' && inputBuffer[i].Event.KeyEvent.uChar.AsciiChar<='9')
-								key = ASCII_KEY_0+(inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'0');
+								key = ASCII_KEY_0 + (inputBuffer[i].Event.KeyEvent.uChar.AsciiChar-'0');
+							else if (inputBuffer[i].Event.KeyEvent.wVirtualKeyCode>=VK_F1 && inputBuffer[i].Event.KeyEvent.wVirtualKeyCode<=VK_F12)
+								key = ASCII_KEY_F1 + (inputBuffer[i].Event.KeyEvent.wVirtualKeyCode-VK_F1);
 							else {
 								for (mapI=0;mapI<_win_keyMappingCount;mapI++) {
 									if (_win_keyMappings[mapI].hardware == inputBuffer[i].Event.KeyEvent.wVirtualKeyCode) {
@@ -128,21 +131,32 @@ void _ascii_runWin (asciiEngine* e) {
 								if (mapI>=_win_keyMappingCount)
 									continue;
 							}
-							e->keyEventCallback(key,state,e->keyEventCallbackContext);
+							if (inputBuffer[i].Event.KeyEvent.bKeyDown==TRUE)
+								asciiOnKeyDown (asciiWin.engine,key);
+							else
+								asciiOnKeyUp (asciiWin.engine,key);
 						} //key event
-						else if (inputBuffer[i].EventType==MOUSE_EVENT && (e->mouseKeyEventCallback!=0 || e->mouseMoveEventCallback!=0)) {
-							state = (inputBuffer[i].Event.MouseEvent.dwButtonState&FROM_LEFT_1ST_BUTTON_PRESSED)>0;
-							mousePos.x = (int32_t)inputBuffer[i].Event.MouseEvent.dwMousePosition.X;
-							mousePos.y = (int32_t)inputBuffer[i].Event.MouseEvent.dwMousePosition.Y;
-							if (inputBuffer[i].Event.MouseEvent.dwEventFlags==0 && e->mouseKeyEventCallback!=0)
-								e->mouseKeyEventCallback(state,mousePos,e->mouseKeyEventCallbackContext);
-							else if (inputBuffer[i].Event.MouseEvent.dwEventFlags==MOUSE_MOVED && e->mouseMoveEventCallback)
-								e->mouseMoveEventCallback(state,mousePos,e->mouseMoveEventCallbackContext);
+						else if (inputBuffer[i].EventType==MOUSE_EVENT) {
+							if (inputBuffer[i].Event.MouseEvent.dwEventFlags == 0) {
+								if ((inputBuffer[i].Event.MouseEvent.dwButtonState&FROM_LEFT_1ST_BUTTON_PRESSED)>0)
+									asciiOnMouseDown(asciiWin.engine,ASCII_MOUSE_BUTTON_LEFT);
+								else
+									asciiOnMouseUp(asciiWin.engine,ASCII_MOUSE_BUTTON_LEFT);
+								if ((inputBuffer[i].Event.MouseEvent.dwButtonState&RIGHTMOST_BUTTON_PRESSED)>0)
+									asciiOnMouseDown(asciiWin.engine,ASCII_MOUSE_BUTTON_RIGHT);
+								else
+									asciiOnMouseUp(asciiWin.engine,ASCII_MOUSE_BUTTON_RIGHT);
+							}
+							else if (inputBuffer[i].Event.MouseEvent.dwEventFlags == MOUSE_MOVED) {
+								mousePos.x = (int32_t)inputBuffer[i].Event.MouseEvent.dwMousePosition.X;
+								mousePos.y = (int32_t)inputBuffer[i].Event.MouseEvent.dwMousePosition.Y;
+								asciiOnMouseMove(asciiWin.engine,mousePos);
+							}
 						}
 					} //for (i=0;i<chunklen;i++)
 				} //while (inputLen>0)
 		}
-		Sleep(30); //equals about 30 frames per second
+		Sleep(16); //equals about 60 frames per second
 	}
 	asciiQuit (e);
 }

@@ -2,7 +2,8 @@
 
 const asciiEngine asciiDefaultEngine={
 	{0},0, //GBackend
-	{0},0,{' ',ASCII_COLOR_BLACK,ASCII_COLOR_WHITE},0, //screen/target/clearChar/optBitmask
+	{0},0,{' ',ASCII_COLOR_BLACK,ASCII_COLOR_WHITE},ASCII_KEY_REPEAT, //screen/target/clearChar/optBitmask
+	{0},0,{0}, //mouse/keyboard
 	0,0, 0,0, 0,0, 0,0, //callbacks
 	{0}, //timers
 };
@@ -132,14 +133,14 @@ void asciiSetKeyEventCallback (asciiEngine* e,asciiKeyEventCallback callback,voi
 		e->graphics.eventChanged (e,ASCII_EVENT_KEY);
 	}
 }
-void asciiSetMouseKeyEventCallback (asciiEngine* e,asciiMouseEventCallback callback,void* context) {
+void asciiSetMouseKeyEventCallback (asciiEngine* e,asciiMouseKeyEventCallback callback,void* context) {
 	if (e) {
 		e->mouseKeyEventCallback = callback;
 		e->mouseKeyEventCallbackContext = context;
 		e->graphics.eventChanged (e,ASCII_EVENT_MOUSEKEY);
 	}
 }
-void asciiSetMouseMoveEventCallback (asciiEngine* e,asciiMouseEventCallback callback,void* context) {
+void asciiSetMouseMoveEventCallback (asciiEngine* e,asciiMouseMoveEventCallback callback,void* context) {
 	if (e) {
 		e->mouseMoveEventCallback = callback;
 		e->mouseMoveEventCallbackContext = context;
@@ -152,6 +153,21 @@ void asciiSetQuitCallback (asciiEngine* e,asciiQuitCallback callback,void* conte
 		e->quitCallbackContext = context;
 		e->graphics.eventChanged(e,ASCII_EVENT_QUIT);
 	}
+}
+asciiBool asciiIsKeyPressed (asciiEngine* e,asciiKey key) {
+	if (e && key<ASCII_KEYCOUNT)
+		return e->keyboardState[key];
+	return ASCII_FALSE;
+}
+asciiBool asciiIsMouseKeyPressed (asciiEngine* e,asciiMouseKey key) {
+	if (e)
+		return (e->mouseKeyState&key)>0;
+	return ASCII_FALSE;
+}
+asciiPoint asciiGetMousePosition (asciiEngine* e) {
+	if (e)
+		return e->mousePosition;
+	return asciiPoint(0,0);
 }
 
 /*
@@ -612,7 +628,7 @@ asciiBitmap asciiLoadBitmapFromStream (asciiTextInStreamCallback stream,void* co
 	bitmap.address = 0;
 	bitmap.trans = 0;
 	bitmap.bounds = asciiRect(0,0,0,0);
-	if (stream==0 || context==0)
+	if (stream==0)
 		return bitmap;
 	//read first number (width)
 	i = _ascii_stream_read_number (stream,context);
@@ -814,26 +830,65 @@ asciiRect asciiClipRect (asciiRect toClip,asciiRect clipRect) {
 	return toClip;
 }
 #ifdef _MSC_VER
-	asciiPoint _ascii_make_asciiPoint (int32_t x,int32_t y) {
-		asciiPoint p;
-		p.x = x;
-		p.y = y;
-		return p;
+asciiPoint _ascii_make_asciiPoint (int32_t x,int32_t y) {
+	asciiPoint p;
+	p.x = x;
+	p.y = y;
+	return p;
+}
+asciiRect _ascii_make_asciiRect (int32_t x,int32_t y,int32_t w,int32_t h) {
+	asciiRect r;
+	r.offset.x = x;
+	r.offset.y = y;
+	r.size.x = w;
+	r.size.y = h;
+	return r;
+}
+asciiChar _ascii_make_asciiChar (asciiTextchar ch,asciiColor bc,asciiColor fc) {
+	asciiChar c;
+	c.character = ch;
+	c.backColor = bc;
+	c.foreColor = fc;
+	c.reserved = 0;
+	return c;
+}
+#endif //_MSC_VER
+
+/*
+ * INTERN API (without asciiQuit)
+ */
+void asciiOnMouseMove (asciiEngine* e,asciiPoint newPos) {
+	if (e->mousePosition.x!=newPos.x || e->mousePosition.y!=newPos.y) {
+		e->mousePosition = newPos;
+		if (e->mouseMoveEventCallback)
+			e->mouseMoveEventCallback (newPos,e->mouseMoveEventCallbackContext);
 	}
-	asciiRect _ascii_make_asciiRect (int32_t x,int32_t y,int32_t w,int32_t h) {
-		asciiRect r;
-		r.offset.x = x;
-		r.offset.y = y;
-		r.size.x = w;
-		r.size.y = h;
-		return r;
+}
+void asciiOnMouseDown (asciiEngine* e,asciiMouseKey key) {
+	if ((e->mouseKeyState&key) == 0) {
+		e->mouseKeyState |= key;
+		if (e->mouseKeyEventCallback)
+			e->mouseKeyEventCallback (key,ASCII_TRUE,e->mouseKeyEventCallbackContext);
 	}
-	asciiChar _ascii_make_asciiChar (asciiTextchar ch,asciiColor bc,asciiColor fc) {
-		asciiChar c;
-		c.character = ch;
-		c.backColor = bc;
-		c.foreColor = fc;
-		c.reserved = 0;
-		return c;
+}
+void asciiOnMouseUp (asciiEngine* e,asciiMouseKey key) {
+	if ((e->mouseKeyState&key) > 0) {
+		e->mouseKeyState &= ~key;
+		if (e->mouseKeyEventCallback)
+			e->mouseKeyEventCallback (key,ASCII_FALSE,e->mouseKeyEventCallbackContext);
 	}
-#endif
+}
+void asciiOnKeyDown (asciiEngine* e,asciiKey key) {
+	if (e->keyboardState[key] == ASCII_FALSE || ASCII_IS_KEY_REPEAT(e)) {
+		e->keyboardState[key] = ASCII_TRUE;
+		if (e->keyEventCallback)
+			e->keyEventCallback (key,ASCII_TRUE,e->keyEventCallbackContext);
+	}
+}
+void asciiOnKeyUp (asciiEngine* e,asciiKey key) {
+	if (e->keyboardState[key] == ASCII_TRUE || ASCII_IS_KEY_REPEAT(e)) {
+		e->keyboardState[key] = ASCII_FALSE;
+		if (e->keyEventCallback)
+			e->keyEventCallback (key,ASCII_FALSE,e->keyEventCallbackContext);
+	}
+}

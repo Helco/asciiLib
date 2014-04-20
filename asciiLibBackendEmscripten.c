@@ -3,27 +3,13 @@
 #include <GL/glfw.h>
 #include <emscripten/emscripten.h>
 
-/*void* realloc_emscripten (void* old,unsigned int oldSize,unsigned int newSize) {
-    void* newBlock=malloc(newSize);
-    if (newBlock==0)
-      return 0;
-    if (old!=0) {
-        memcpy(newBlock,old,oldSize);
-        free(old);
-    }
-    return newBlock;
-}*/
-
 extern void js_ascii_setConsoleSize (int32_t w,int32_t h);
-extern int32_t js_ascii_getCharacterWidth ();
-extern int32_t js_ascii_getCharacterHeight ();
+extern void js_ascii_toggleEvents (int32_t toggle);
 extern void js_ascii_changeConsoleText (const char* text,uint32_t len);
 extern void js_ascii_changeConsoleColors (const char* backColor,const char* foreColor);
 extern void js_ascii_setTimeout (int32_t ms,int32_t id);
-extern void js_ascii_toggleMouseKeyEvent (int32_t toggle);
-extern void js_ascii_toggleMouseMoveEvent (int32_t toggle);
-extern void js_ascii_onMouseEvent (int32_t dummy); //this function has to be called by C to ensure the existence for javascript functions
-extern void js_ascii_onDocumentMouseKey (int32_t dummy);
+extern void js_ascii_onMouseMoveEvent (int32_t dummy); //these functions has to be called by C to ensure the existence
+extern void js_ascii_onMouseKeyEvent (int32_t dummy); //as they can be removed by the optimizer (TODO: Replace with inline?)
 
 struct {
 	asciiEngine* engine;
@@ -33,9 +19,11 @@ struct {
 	int8_t backColor,foreColor;
 } asciiWeb = {0}; //badstyle because of glfwKeyHandler
 static const uint32_t _web_bufferChunk=4096;
+void _ascii_glfwKeyHandler (int glKey,int glAction);
 asciiBool _ascii_initWeb (asciiEngine* e,int32_t w,int32_t h) {
-	js_ascii_onMouseEvent(0);
-	js_ascii_onDocumentMouseKey(0);
+	js_ascii_onMouseMoveEvent(0);
+	js_ascii_onMouseKeyEvent(0);
+
 	asciiWeb.engine = e;
 	asciiWeb.bufferLen=((uint32_t)w)*h;
 	asciiWeb.bufferPtr=0;
@@ -46,28 +34,32 @@ asciiBool _ascii_initWeb (asciiEngine* e,int32_t w,int32_t h) {
 		return ASCII_FAILED;
 	js_ascii_setConsoleSize(w,h);
 	glfwInit ();//set up the keyboard event
+	glfwSetKeyCallback(_ascii_glfwKeyHandler);
+	js_ascii_toggleEvents (1);
 	return ASCII_SUCESS;
 }
-#define _web_keyMappingCount 16
+#define _web_keyMappingCount 18
 const asciiKeyMap _web_keyMappings [_web_keyMappingCount]={
 	{GLFW_KEY_BACKSPACE,ASCII_KEY_BACKSPACE},{GLFW_KEY_TAB,ASCII_KEY_TAB},{GLFW_KEY_ENTER,ASCII_KEY_RETURN},{GLFW_KEY_ESC,ASCII_KEY_ESCAPE},
 	{GLFW_KEY_SPACE,ASCII_KEY_SPACE},{GLFW_KEY_UP,ASCII_KEY_UP},{GLFW_KEY_DOWN,ASCII_KEY_DOWN},{GLFW_KEY_RIGHT,ASCII_KEY_RIGHT},
 	{GLFW_KEY_LEFT,ASCII_KEY_LEFT},{GLFW_KEY_LSHIFT,ASCII_KEY_SHIFT},{GLFW_KEY_RSHIFT,ASCII_KEY_SHIFT},
 	{GLFW_KEY_LCTRL,ASCII_KEY_CTRL},{GLFW_KEY_RCTRL,ASCII_KEY_CTRL},
+	{GLFW_KEY_LALT,ASCII_KEY_ALT},{GLFW_KEY_RALT,ASCII_KEY_CTRL},
 	{255,ASCII_KEY_ESCAPE},{13,ASCII_KEY_RETURN},{'\b',ASCII_KEY_BACKSPACE}}; //the GLFW_KEY_* doesn't work for ESCAPE, RETURN and BACKSPACE
 #define GLFW_KEY_0 ((int)'0')
 #define GLFW_KEY_9 ((int)'9')
 #define GLFW_KEY_A ((int)'A')
 #define GLFW_KEY_Z ((int)'Z')
 void _ascii_glfwKeyHandler (int glKey,int glAction) {
-	//no need to check if the callback is registered
 	if (asciiWeb.engine && (glAction==GLFW_PRESS || glAction==GLFW_RELEASE)) {
 		uint8_t key = ASCII_KEYCOUNT,
-			action = (glAction==GLFW_PRESS?ASCII_KEYPRESSED:ASCII_KEYRELEASED);
+			action = (glAction==GLFW_PRESS);
 		if (glKey>=GLFW_KEY_A && glKey<=GLFW_KEY_Z)
-			key = ASCII_KEY_A+(glKey-GLFW_KEY_A);
+			key = ASCII_KEY_A + (glKey-GLFW_KEY_A);
 		else if (glKey>=GLFW_KEY_0 && glKey<=GLFW_KEY_9)
-			key = ASCII_KEY_0+(glKey-GLFW_KEY_0);
+			key = ASCII_KEY_0 + (glKey-GLFW_KEY_0);
+		else if (glKey>=GLFW_KEY_F1 && glKey<=GLFW_KEY_F12)
+			key = ASCII_KEY_F1 + (glKey-GLFW_KEY_F1);
 		else {
 			uint8_t i;
 			for (i=0;i<_web_keyMappingCount;i++) {
@@ -77,8 +69,12 @@ void _ascii_glfwKeyHandler (int glKey,int glAction) {
 				}
 			}
 		}
-		if (key<ASCII_KEYCOUNT)
-			asciiWeb.engine->keyEventCallback(key,action,asciiWeb.engine->keyEventCallbackContext);
+		if (key<ASCII_KEYCOUNT) {
+			if (action)
+				asciiOnKeyDown(asciiWeb.engine,key);
+			else
+				asciiOnKeyUp(asciiWeb.engine,key);
+		}
 	}
 }
 void _ascii_runWeb (asciiEngine* engine) {
@@ -87,6 +83,7 @@ void _ascii_quitWeb (asciiEngine* engine) {
 	const char* message="User closed ASCII web application";
 	const uint8_t len=(uint8_t)strlen(message);
 	glfwSetKeyCallback(0);
+	js_ascii_toggleEvents(0);
 	free(asciiWeb.buffer);
 	asciiWeb.buffer=0;
 	asciiWeb.bufferLen=0;
@@ -107,14 +104,15 @@ int32_t _onjs_fireTimeout (int32_t id) { //ATTENTION ATTENTION ATTENTION: Make s
 	}
 	return 0;
 }
-int32_t _onjs_fireMouseKey (int32_t buttonPressed,int32_t posX,int32_t posY) {
-	//No need to check if the callback is registerd
-	asciiWeb.engine->mouseKeyEventCallback((int8_t)buttonPressed,asciiPoint(posX,posY),asciiWeb.engine->mouseKeyEventCallbackContext);
+int32_t _onjs_fireMouseMove (int32_t X,int32_t Y) {
+	asciiOnMouseMove(asciiWeb.engine,asciiPoint(X,Y));
 	return 0;
 }
-int32_t _onjs_fireMouseMove (int32_t buttonPressed,int32_t posX,int32_t posY) {
-	//No need to check if the callback is registered
-	asciiWeb.engine->mouseMoveEventCallback((int8_t)buttonPressed,asciiPoint(posX,posY),asciiWeb.engine->mouseMoveEventCallbackContext);
+int32_t _onjs_fireMouseKey (int32_t buttonPressed,int32_t isDown) {
+	if (isDown)
+		asciiOnMouseDown(asciiWeb.engine,buttonPressed);
+	else
+		asciiOnMouseUp(asciiWeb.engine,buttonPressed);
 	return 0;
 }
 const char* _ascii_getWebColorString (int8_t c) {
@@ -157,8 +155,7 @@ const char* _ascii_getWebColorString (int8_t c) {
 #define SPAN_STR_FORECOLOR_OFF 19
 #define SPAN_STR_CHARACTER_OFF 23
 int8_t _ascii_flipWeb (asciiEngine* e) {
-	//TODO: Optimize: No (fore)color changing if spaces aren't displayed...
-	int32_t x,y,x2;
+	int32_t x,y;
 	char c;
 	int8_t bc,fc,curBc = asciiWeb.backColor,
 		curFc = asciiWeb.foreColor,
@@ -212,12 +209,6 @@ int8_t _ascii_flipWeb (asciiEngine* e) {
 	return 1;
 }
 void _ascii_eventChangedWeb (asciiEngine* e,asciiEvent ev) {
-	if (ev==ASCII_EVENT_KEY)
-		glfwSetKeyCallback(e->keyEventCallback==0?0:_ascii_glfwKeyHandler);
-	else if (ev==ASCII_EVENT_MOUSEKEY)
-		js_ascii_toggleMouseKeyEvent (e->mouseKeyEventCallback!=0);
-	else if (ev==ASCII_EVENT_MOUSEMOVE)
-		js_ascii_toggleMouseMoveEvent (e->mouseMoveEventCallback!=0);
 }
 const asciiGBackend asciiGraphicBackendEmscripten = {
 	_ascii_initWeb,

@@ -25,7 +25,8 @@ enum {
 	ASCII_BACKCOLOR_LOCK=1<<1,
 	ASCII_FORECOLOR_LOCK=1<<2,
 	ASCII_TARGET_BITMAP=1<<3,
-	ASCII_OPT_COUNT=4,
+	ASCII_KEY_REPEAT=1<<4,
+	ASCII_OPT_COUNT=5,
 
 	ASCII_COLOR_BLACK=0,
 	ASCII_COLOR_RED,
@@ -37,11 +38,30 @@ enum {
 	ASCII_COLOR_WHITE,
 	ASCII_COLOR_COUNT,
 
-	ASCII_KEY_BACKSPACE,
+	ASCII_KEY_BACKSPACE=0,
 	ASCII_KEY_TAB,
 	ASCII_KEY_RETURN,
 	ASCII_KEY_ESCAPE,
 	ASCII_KEY_SPACE,
+	ASCII_KEY_UP,
+	ASCII_KEY_DOWN,
+	ASCII_KEY_RIGHT,
+	ASCII_KEY_LEFT,
+	ASCII_KEY_SHIFT,
+	ASCII_KEY_CTRL,
+	ASCII_KEY_ALT,
+	ASCII_KEY_F1,
+	ASCII_KEY_F2,
+	ASCII_KEY_F3,
+	ASCII_KEY_F4,
+	ASCII_KEY_F5,
+	ASCII_KEY_F6,
+	ASCII_KEY_F7,
+	ASCII_KEY_F8,
+	ASCII_KEY_F9,
+	ASCII_KEY_F10,
+	ASCII_KEY_F11,
+	ASCII_KEY_F12,
 	ASCII_KEY_0,
 	ASCII_KEY_1,
 	ASCII_KEY_2,
@@ -77,17 +97,14 @@ enum {
 	ASCII_KEY_W,
 	ASCII_KEY_X,
 	ASCII_KEY_Y,
-	ASCII_KEY_Z,
-	ASCII_KEY_UP,
-	ASCII_KEY_DOWN,
-	ASCII_KEY_RIGHT,
-	ASCII_KEY_LEFT,
-	ASCII_KEY_SHIFT,
-	ASCII_KEY_CTRL,
+	ASCII_KEY_Z, 
 	ASCII_KEYCOUNT,
-	ASCII_KEYPRESSED=1,
-	ASCII_KEYRELEASED=0,
+
+	ASCII_MOUSE_BUTTON_LEFT=1<<0,
+	ASCII_MOUSE_BUTTON_RIGHT=1<<1
 };
+typedef uint8_t asciiKey;
+typedef uint8_t asciiMouseKey;
 typedef uint8_t asciiGraphicBackend;
 typedef int8_t asciiTextchar;
 typedef const char* asciiString;
@@ -124,8 +141,9 @@ typedef struct {
 	int32_t pitch;
 } asciiColoredBitmap;
 
-typedef void (*asciiKeyEventCallback) (uint8_t key,uint8_t pressed,void* context);
-typedef void (*asciiMouseEventCallback) (uint8_t buttonPressed,asciiPoint mousePos,void* context);
+typedef void (*asciiKeyEventCallback) (asciiKey key,asciiBool pressed,void* context);
+typedef void (*asciiMouseMoveEventCallback) (asciiPoint mousePos,void* context);
+typedef void (*asciiMouseKeyEventCallback) (asciiMouseKey key,asciiBool pressed,void* context);
 typedef void (*asciiQuitCallback) (void* context);
 typedef void (*asciiTimeoutCallback) (void* context);
 typedef asciiTextchar (*asciiTextInStreamCallback) (void* context); //pass 0 to signal the end
@@ -136,9 +154,12 @@ asciiEngine* asciiInit (asciiGraphicBackend g,int32_t width,int32_t height); //t
 void asciiRun (asciiEngine* e);
 void asciiSignalQuit (asciiEngine* e); //should be only called when building a local app
 void asciiSetKeyEventCallback (asciiEngine* e,asciiKeyEventCallback callback,void* context);
-void asciiSetMouseKeyEventCallback (asciiEngine* e,asciiMouseEventCallback callback,void* context);
-void asciiSetMouseMoveEventCallback (asciiEngine* e,asciiMouseEventCallback callback,void* context);
+void asciiSetMouseKeyEventCallback (asciiEngine* e,asciiMouseKeyEventCallback callback,void* context);
+void asciiSetMouseMoveEventCallback (asciiEngine* e,asciiMouseMoveEventCallback callback,void* context);
 void asciiSetQuitCallback (asciiEngine* e,asciiQuitCallback callback,void* context);
+asciiBool asciiIsKeyPressed (asciiEngine* e,asciiKey key);
+asciiBool asciiIsMouseKeyPressed (asciiEngine* e,asciiMouseKey key);
+asciiPoint asciiGetMousePosition (asciiEngine* e);
 
 //Graphic management functions
 void asciiToggle (asciiEngine* e,uint32_t bit,asciiBool set);
