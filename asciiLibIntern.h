@@ -65,9 +65,6 @@ typedef struct _asciiGBackend {
 #define ASCII_IS_KEY_REPEAT(e)		 ASCII_IS_OPT((e),ASCII_KEY_REPEAT)
 #define ASCII_TARGET(e)              (ASCII_IS_TARGET_BITMAP(e)?(e)->targetBitmap:&(e)->screen)
 
-static const int8_t asciiKeyAsciiTable[ASCII_KEYCOUNT]={
-	'\b','\t','\n',0,' ','0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G',
-	'H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',0,0,0,0,0,0};
 typedef struct _asciiKeyMap {
 	int32_t hardware;
 	uint8_t key;
